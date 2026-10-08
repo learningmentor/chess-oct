@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Chess - 2 Player & AI</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- jQuery (required by chessboard.js) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Chess.js for game logic -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <!-- Chessboard.js for board UI -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .highlight-white { box-shadow: inset 0 0 3px 3px rgba(255, 255, 0, 0.7); }
+        .highlight-black { box-shadow: inset 0 0 3px 3px rgba(0, 0, 0, 0.5); }
+        .board-container { width: 100%; max-width: 480px; margin: 0 auto; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-full flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 py-4 px-6 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-600/30 text-xl font-bold">
+                    <i class="fa-solid fa-chess"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Grandmaster Chess</h1>
+                    <p class="text-xs text-slate-400">Play local 2-player or challenge the AI engine</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700/50">
+                <button id="mode-pvp" onclick="setGameMode('pvp')" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-indigo-600 text-white shadow">2 Players</button>
+                <button id="mode-pve" onclick="setGameMode('pve')" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all text-slate-400 hover:text-white">vs AI</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Column: Controls & Game Info -->
+        <div class="lg:col-span-4 flex flex-col gap-5 order-2 lg:order-1">
+            
+            <!-- Settings Card (Visible in AI Mode) -->
+            <div id="ai-settings-card" class="bg-slate-800/60 backdrop-blur border border-slate-700/80 rounded-2xl p-5 shadow-xl hidden">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-robot text-indigo-400"></i> AI Difficulty & Color
+                </h2>
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button onclick="setDifficulty('easy')" id="diff-easy" class="py-2 px-3 rounded-xl text-xs font-bold border border-slate-700 bg-indigo-600 text-white transition-all">Easy</button>
+                    <button onclick="setDifficulty('medium')" id="diff-medium" class="py-2 px-3 rounded-xl text-xs font-bold border border-slate-700 bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-all">Medium</button>
+                    <button onclick="setDifficulty('hard')" id="diff-hard" class="py-2 px-3 rounded-xl text-xs font-bold border border-slate-700 bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-all">Hard</button>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-300">Play as:</span>
+                    <div class="flex gap-2">
+                        <button onclick="setPlayerColor('w')" id="color-w" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white border border-indigo-500">White</button>
+                        <button onclick="setPlayerColor('b')" id="color-b" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-slate-300 border border-slate-600">Black</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="bg-slate-800/60 backdrop-blur border border-slate-700/80 rounded-2xl p-5 shadow-xl">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Game Status</h2>
+                    <span id="game-status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
+                </div>
+                <div id="game-status-text" class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <span class="inline-block w-3 h-3 rounded-full bg-white border border-slate-400" id="turn-indicator"></span>
+                    <span>White's Turn</span>
+                </div>
+                <div id="captured-pieces" class="mt-4 pt-4 border-t border-slate-700/60 flex flex-col gap-2 text-xs text-slate-400">
+                    <div>Captured by White: <span id="captured-white" class="font-bold text-slate-200">-</span></div>
+                    <div>Captured by Black: <span id="captured-black" class="font-bold text-slate-200">-</span></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="undoMove()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/60 shadow-lg active:scale-95">
+                    <i class="fa-solid fa-rotate-left"></i> Undo Move
+                </button>
+                <button onclick="resetGame()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95">
+                    <i class="fa-solid fa-arrows-rotate"></i> New Game
+                </button>
+            </div>
+
+            <!-- Move History -->
+            <div class="bg-slate-800/60 backdrop-blur border border-slate-700/80 rounded-2xl p-5 shadow-xl flex-1 flex flex-col min-h-[200px]">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+                    <span><i class="fa-solid fa-list-ul text-indigo-400"></i> Move History</span>
+                    <span id="move-count" class="text-xs bg-slate-700 px-2 py-0.5 rounded-md">0 moves</span>
+                </h2>
+                <div id="move-history-container" class="flex-1 overflow-y-auto max-h-[220px] pr-1 space-y-1 scrollbar-thin scrollbar-thumb-slate-700">
+                    <p class="text-xs text-slate-500 italic text-center py-6">No moves played yet.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: The Chessboard -->
+        <div class="lg:col-span-8 flex flex-col items-center justify-center order-1 lg:order-2">
+            <div class="bg-slate-800/80 backdrop-blur border border-slate-700/80 p-5 rounded-3xl shadow-2xl w-full max-w-[540px] flex flex-col items-center">
+                <!-- Black Player Header -->
+                <div class="w-full flex justify-between items-center mb-3 px-2">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 font-bold text-sm">
+                            <i class="fa-solid fa-chess-pawn"></i>
+                        </div>
+                        <div>
+                            <div id="black-player-name" class="text-sm font-bold text-slate-200">Player 2 (Black)</div>
+                            <div class="text-[10px] text-slate-400" id="black-rating">Rating: 1200</div>
+                        </div>
+                    </div>
+                    <div id="black-timer" class="text-xs font-mono font-semibold bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-700/50 text-slate-300 hidden">10:00</div>
+                </div>
+
+                <!-- Board Element -->
+                <div id="board" class="board-container shadow-2xl rounded-xl overflow-hidden border border-slate-700"></div>
+
+                <!-- White Player Header -->
+                <div class="w-full flex justify-between items-center mt-3 px-2">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-900 font-bold text-sm">
+                            <i class="fa-solid fa-chess-pawn"></i>
+                        </div>
+                        <div>
+                            <div id="white-player-name" class="text-sm font-bold text-slate-200">Player 1 (White)</div>
+                            <div class="text-[10px] text-slate-400" id="white-rating">Rating: 1200</div>
+                        </div>
+                    </div>
+                    <div id="white-timer" class="text-xs font-mono font-semibold bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-700/50 text-slate-300 hidden">10:00</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Custom Modal for Notifications -->
+    <div id="custom-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-800 border border-slate-700 max-w-sm w-full rounded-2xl p-6 shadow-2xl text-center transform transition-all">
+            <div id="modal-icon" class="w-16 h-16 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl border border-indigo-500/30">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h3 id="modal-title" class="text-lg font-bold text-white mb-2">Game Over</h3>
+            <p id="modal-message" class="text-sm text-slate-300 mb-6">Checkmate! White wins the game.</p>
+            <button onclick="closeModal(); resetGame();" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition-all">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <footer class="text-center py-4 text-xs text-slate-500 border-t border-slate-800">
+        Grandmaster Chess Engine &bull; Powered by Chess.js & Chessboard.js
+    </footer>
+
+    <script>
+        let game = new Chess();
+        let board = null;
+        let gameMode = 'pvp'; // 'pvp' or 'pve'
+        let aiDifficulty = 'easy'; // 'easy', 'medium', 'hard'
+        let playerColor = 'w'; // 'w' or 'b'
+        let moveHistoryList = [];
+        let capturedByWhite = [];
+        let capturedByBlack = [];
+        let aiThinking = false;
+
+        // Piece values for evaluation
+        const pieceValues = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
+
+        $(document).ready(function() {
+            initBoard();
+            updateStatus();
+        });
+
+        function initBoard() {
+            let cfg = {
+                draggable: true,
+                position: 'start',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd,
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+            };
+            board = Chessboard('board', cfg);
+            $(window).resize(function() {
+                board.resize();
+            });
+        }
+
+        function setGameMode(mode) {
+            gameMode = mode;
+            if (mode === 'pvp') {
+                $('#mode-pvp').addClass('bg-indigo-600 text-white shadow').removeClass('text-slate-400');
+                $('#mode-pve').removeClass('bg-indigo-600 text-white shadow').addClass('text-slate-400');
+                $('#ai-settings-card').addClass('hidden');
+                $('#white-player-name').text('Player 1 (White)');
+                $('#black-player-name').text('Player 2 (Black)');
+            } else {
+                $('#mode-pve').addClass('bg-indigo-600 text-white shadow').removeClass('text-slate-400');
+                $('#mode-pvp').removeClass('bg-indigo-600 text-white shadow').addClass('text-slate-400');
+                $('#ai-settings-card').removeClass('hidden');
+                updatePlayerLabels();
+            }
+            resetGame();
+        }
+
+        function setDifficulty(diff) {
+            aiDifficulty = diff;
+            ['easy', 'medium', 'hard'].forEach(d => {
+                if (d === diff) {
+                    $(`#diff-${d}`).addClass('bg-indigo-600 text-white').removeClass('bg-slate-700/50 text-slate-300');
+                } else {
+                    $(`#diff-${d}`).removeClass('bg-indigo-600 text-white').addClass('bg-slate-700/50 text-slate-300');
+                }
+            });
+        }
+
+        function setPlayerColor(color) {
+            playerColor = color;
+            if (color === 'w') {
+                $('#color-w').addClass('bg-indigo-600 text-white border-indigo-500').removeClass('bg-slate-700 text-slate-300 border-slate-600');
+                $('#color-b').removeClass('bg-indigo-600 text-white border-indigo-500').addClass('bg-slate-700 text-slate-300 border-slate-600');
+            } else {
+                $('#color-b').addClass('bg-indigo-600 text-white border-indigo-500').removeClass('bg-slate-700 text-slate-300 border-slate-600');
+                $('#color-w').removeClass('bg-indigo-600 text-white border-indigo-500').addClass('bg-slate-700 text-slate-300 border-slate-600');
+            }
+            updatePlayerLabels();
+            resetGame();
+        }
+
+        function updatePlayerLabels() {
+            if (gameMode === 'pve') {
+                if (playerColor === 'w') {
+                    $('#white-player-name').text('Player (White)');
+                    $('#black-player-name').text(`AI (${aiDifficulty.toUpperCase()}) (Black)`);
+                    board.orientation('white');
+                } else {
+                    $('#white-player-name').text(`AI (${aiDifficulty.toUpperCase()}) (White)`);
+                    $('#black-player-name').text('Player (Black)');
+                    board.orientation('black');
+                    // Trigger AI if black starts
+                    window.setTimeout(makeAIMove, 250);
+                }
+            }
+        }
+
+        function onDragStart(source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            if (aiThinking) return false;
+
+            // If in PvE mode, prevent moving opponent pieces
+            if (gameMode === 'pve') {
+                if ((playerColor === 'w' && piece.search(/^b/) !== -1) ||
+                    (playerColor === 'b' && piece.search(/^w/) !== -1)) {
+                    return false;
+                }
+            }
+
+            // Only pick up pieces for the side to move
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+        }
+
+        function onDrop(source, target) {
+            // See if the move is legal
+            let moveObj = {
+                from: source,
+                to: target,
+                promotion: 'q' // NOTE: always promote to a queen for simplicity
+            };
+
+            let move = game.move(moveObj);
+
+            // Illegal move
+            if (move === null) return 'snapback';
+
+            trackMove(move);
+            updateStatus();
+
+            // If PvE mode and game is not over, trigger AI move
+            if (gameMode === 'pve' && !game.game_over()) {
+                aiThinking = true;
+                window.setTimeout(makeAIMove, 300);
+            }
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        function trackMove(move) {
+            // Check for captures
+            if (move.captured) {
+                if (move.color === 'w') {
+                    capturedByWhite.push(move.captured.toUpperCase());
+                } else {
+                    capturedByBlack.push(move.captured.toUpperCase());
+                }
+                updateCapturedDisplay();
+            }
+            moveHistoryList.push(move);
+            renderMoveHistory();
+        }
+
+        function updateCapturedDisplay() {
+            $('#captured-white').text(capturedByWhite.length > 0 ? capturedByWhite.join(' ') : '-');
+            $('#captured-black').text(capturedByBlack.length > 0 ? capturedByBlack.join(' ') : '-');
+        }
+
+        function renderMoveHistory() {
+            let container = $('#move-history-container');
+            container.empty();
+            if (moveHistoryList.length === 0) {
+                container.html('<p class="text-xs text-slate-500 italic text-center py-6">No moves played yet.</p>');
+                $('#move-count').text('0 moves');
+                return;
+            }
+
+            $('#move-count').text(`${moveHistoryList.length} move${moveHistoryList.length > 1 ? 's' : ''}`);
+
+            let html = '<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">';
+            for (let i = 0; i < moveHistoryList.length; i += 2) {
+                let moveNum = Math.floor(i / 2) + 1;
+                let whiteMove = moveHistoryList[i] ? moveHistoryList[i].san : '';
+                let blackMove = moveHistoryList[i + 1] ? moveHistoryList[i + 1].san : '';
+                
+                html += `<div class="py-1 px-2 rounded hover:bg-slate-700/40 flex justify-between text-slate-300">
+                    <span class="text-slate-500 w-6">${moveNum}.</span>
+                    <span class="flex-1 font-semibold text-white">${whiteMove}</span>
+                </div>`;
+                if (blackMove) {
+                    html += `<div class="py-1 px-2 rounded hover:bg-slate-700/40 flex justify-between text-slate-300">
+                        <span class="text-slate-500 w-6"></span>
+                        <span class="flex-1 font-semibold text-white">${blackMove}</span>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+            container.html(html);
+            container.scrollTop(container[0].scrollHeight);
+        }
+
+        function updateStatus() {
+            let status = '';
+            let turnColor = game.turn() === 'w' ? 'White' : 'Black';
+            let badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+            let badgeText = 'Active';
+
+            $('#turn-indicator').removeClass('bg-white bg-slate-900 border-slate-400').addClass(game.turn() === 'w' ? 'bg-white border-slate-400' : 'bg-slate-900 border-slate-600');
+
+            if (game.in_checkmate()) {
+                let winner = game.turn() === 'w' ? 'Black' : 'White';
+                status = `Checkmate! ${winner} wins.`;
+                badgeText = 'Checkmate';
+                badgeClass = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                showModal('Checkmate!', `${winner} wins the game by checkmate!`, 'fa-trophy');
+            } else if (game.in_draw()) {
+                status = 'Game drawn (Stalemate / Insufficient material)';
+                badgeText = 'Draw';
+                badgeClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                showModal('Draw!', 'The game ended in a draw.', 'fa-handshake');
+            } else {
+                status = `${turnColor}'s Turn`;
+                if (game.in_check()) {
+                    status += ' (Check!)';
+                    badgeText = 'Check';
+                    badgeClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                }
+            }
+
+            $('#game-status-text span:last-child').text(status);
+            $('#game-status-badge').text(badgeText).attr('class', `px-2.5 py-1 rounded-full text-xs font-bold border ${badgeClass}`);
+        }
+
+        function undoMove() {
+            if (gameMode === 'pve') {
+                // Undo player move and AI move
+                game.undo();
+                game.undo();
+                moveHistoryList.pop();
+                moveHistoryList.pop();
+            } else {
+                game.undo();
+                moveHistoryList.pop();
+            }
+            board.position(game.fen());
+            updateStatus();
+            renderMoveHistory();
+            aiThinking = false;
+        }
+
+        function resetGame() {
+            game.reset();
+            board.position('start');
+            moveHistoryList = [];
+            capturedByWhite = [];
+            capturedByBlack = [];
+            aiThinking = false;
+            updateCapturedDisplay();
+            renderMoveHistory();
+            updateStatus();
+
+            if (gameMode === 'pve' && playerColor === 'b') {
+                aiThinking = true;
+                window.setTimeout(makeAIMove, 250);
+            }
+        }
+
+        function showModal(title, message, iconClass) {
+            $('#modal-title').text(title);
+            $('#modal-message').text(message);
+            $('#modal-icon').html(`<i class="fa-solid ${iconClass}"></i>`);
+            $('#custom-modal').removeClass('hidden');
+        }
+
+        function closeModal() {
+            $('#custom-modal').addClass('hidden');
+        }
+
+        // --- AI ENGINE LOGIC ---
+        function makeAIMove() {
+            if (game.game_over()) return;
+
+            let move = null;
+            if (aiDifficulty === 'easy') {
+                move = getEasyMove();
+            } else if (aiDifficulty === 'medium') {
+                move = getMediumMove();
+            } else {
+                move = getHardMove();
+            }
+
+            if (move) {
+                let moveRes = game.move(move);
+                trackMove(moveRes);
+                board.position(game.fen());
+                updateStatus();
+            }
+            aiThinking = false;
+        }
+
+        function getEasyMove() {
+            let moves = game.moves({ verbose: true });
+            if (moves.length === 0) return null;
+            // Pick a random legal move
+            let randomIndex = Math.floor(Math.random() * moves.length);
+            return moves[randomIndex];
+        }
+
+        function getMediumMove() {
+            let moves = game.moves({ verbose: true });
+            if (moves.length === 0) return null;
+
+            // Prioritize captures or checks, otherwise random
+            let weightedMoves = moves.map(m => {
+                let score = 0;
+                if (m.captured) score += pieceValues[m.captured] || 10;
+                if (m.san.includes('+')) score += 5;
+                return { move: m, score: score };
+            });
+
+            weightedMoves.sort((a, b) => b.score - a.score);
+            // Pick among top candidates with some randomness
+            let topMoves = weightedMoves.filter(m => m.score === weightedMoves[0].score);
+            let selected = topMoves[Math.floor(Math.random() * topMoves.length)];
+            return selected.move;
+        }
+
+        function getHardMove() {
+            // Simple minimax with depth 2-3 alpha-beta pruning
+            let bestMove = null;
+            let bestValue = -99999;
+            let isMaximizing = game.turn() === 'w';
+
+            let moves = game.moves({ verbose: true });
+            // Sort moves to improve alpha-beta pruning efficiency
+            moves.sort((a, b) => {
+                let scoreA = a.captured ? pieceValues[a.captured] : 0;
+                let scoreB = b.captured ? pieceValues[b.captured] : 0;
+                return scoreB - scoreA;
+            });
+
+            for (let i = 0; i < moves.length; i++) {
+                let move = moves[i];
+                game.move(move);
+                let value = minimax(2, -100000, 100000, false);
+                game.undo();
+                if (value > bestValue) {
+                    bestValue = value;
+                    bestMove = move;
+                }
+            }
+            return bestMove || getEasyMove();
+        }
+
+        function minimax(depth, alpha, beta, maximizingPlayer) {
+            if (depth === 0 || game.game_over()) {
+                return evaluateBoard(game.board());
+            }
+
+            let moves = game.moves({ verbose: true });
+
+            if (maximizingPlayer) {
+                let maxEval = -100000;
+                for (let i = 0; i < moves.length; i++) {
+                    game.move(moves[i]);
+                    let evaluation = minimax(depth - 1, alpha, beta, false);
+                    game.undo();
+                    maxEval = Math.max(maxEval, evaluation);
+                    alpha = Math.max(alpha, evaluation);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = 100000;
+                for (let i = 0; i < moves.length; i++) {
+                    game.move(moves[i]);
+                    let evaluation = minimax(depth - 1, alpha, beta, true);
+                    game.undo();
+                    minEval = Math.min(minEval, evaluation);
+                    beta = Math.min(beta, evaluation);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
+        }
+
+        function evaluateBoard(boardState) {
+            let totalEvaluation = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    let piece = boardState[r][c];
+                    if (piece) {
+                        let val = pieceValues[piece.type];
+                        if (piece.color === 'w') {
+                            totalEvaluation += val;
+                        } else {
+                            totalEvaluation -= val;
+                        }
+                    }
+                }
+            }
+            return game.turn() === 'w' ? totalEvaluation : -totalEvaluation;
+        }
+    </script>
+</body>
+</html>
